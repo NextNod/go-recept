@@ -9,7 +9,9 @@ type Product struct {
 
 type Recept struct {
 	gorm.Model
-	Name string
+	Author      uint
+	Name        string
+	Description string
 }
 
 type ReceptProduct struct {
@@ -31,9 +33,11 @@ type ProductIn struct {
 }
 
 type ReceptIn struct {
-	Name     string
-	Products []int
-	Images   []string
+	Name        string
+	Description string
+	Author      string
+	Products    []int
+	Images      []string
 }
 
 type ImageResponse struct {
@@ -41,10 +45,12 @@ type ImageResponse struct {
 }
 
 type ReceptResponse struct {
-	ID       uint
-	Name     string
-	Images   []ImageReceptProduct
-	Products []ProductResponse
+	ID          uint
+	Name        string
+	Description string
+	Author      User
+	Images      []ImageReceptProduct
+	Products    []ProductResponse
 }
 
 type ProductResponse struct {
@@ -55,4 +61,23 @@ type ProductResponse struct {
 
 type BaseResponse struct {
 	Result any
+	Error  string
+}
+
+type User struct {
+	gorm.Model
+	Name  string
+	Image string
+	GID   string
+}
+
+type UserIn struct {
+	Name  string
+	Image string
+	GID   string `gorm:"unique"`
+}
+
+type UserResponse struct {
+	User any
+	New  bool
 }

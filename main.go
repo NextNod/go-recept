@@ -70,12 +70,26 @@ func AddReceptRouterHadler(w http.ResponseWriter, r *http.Request) {
 	var (
 		buf      bytes.Buffer
 		receptIn models.ReceptIn
+		author   []models.User
 	)
 	io.Copy(&buf, r.Body)
 	json.Unmarshal(buf.Bytes(), &receptIn)
-	fmt.Printf("Add new recept: \"%s\"\n", receptIn.Name)
+	fmt.Printf("Add new recept: \"%s\":\"%s\"\n", receptIn.Name, receptIn.Author)
+
+	db.Where("g_id = ?", receptIn.Author).Find(&author)
+
+	if len(author) == 0 {
+		result, _ := json.Marshal(models.BaseResponse{
+			Error: "No such user",
+		})
+		w.Write(result)
+		return
+	}
+
 	recept := models.Recept{
-		Name: receptIn.Name,
+		Name:        receptIn.Name,
+		Description: receptIn.Description,
+		Author:      author[0].ID,
 	}
 	err := db.Create(&recept).Error
 	if err != nil {
@@ -108,7 +122,7 @@ func UploadImageRouterHadler(w http.ResponseWriter, r *http.Request) {
 	w.Write(result)
 }
 
-// Выдача страниц по 20 едениц
+// Выдача рецептов по 20 едениц
 func QueryReceptRouterHandler(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	var (
@@ -128,10 +142,12 @@ func QueryReceptRouterHandler(w http.ResponseWriter, r *http.Request) {
 			images       []models.ImageReceptProduct
 			products_ids []models.ReceptProduct
 			products     []models.ProductResponse
+			user         models.User
 		)
 
 		db.Where("recept_id = ?", recept.ID).Find(&images)
 		db.Where("recept_id = ?", recept.ID).Find(&products_ids)
+		db.Find(&user, recept.Author)
 
 		for _, product_id := range products_ids {
 			var (
@@ -149,6 +165,7 @@ func QueryReceptRouterHandler(w http.ResponseWriter, r *http.Request) {
 
 		resultRecepts = append(resultRecepts, models.ReceptResponse{
 			ID:       recept.ID,
+			Author:   user,
 			Name:     recept.Name,
 			Images:   images,
 			Products: products,
@@ -158,6 +175,7 @@ func QueryReceptRouterHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(result)
 }
 
+// Выдача продуктов по 20 едениц
 func QueryProductRouterHandler(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	var (
@@ -256,6 +274,83 @@ func PoliticsRouterHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(buf.Bytes())
 }
 
+func AddNewUserRouterHandler(w http.ResponseWriter, r *http.Request) {
+	var (
+		buf    bytes.Buffer
+		user   models.UserIn
+		dbUser []models.User
+	)
+	io.Copy(&buf, r.Body)
+	err := json.Unmarshal(buf.Bytes(), &user)
+	db.Where("g_id = ?", user.GID).Find(&dbUser)
+	if len(dbUser) != 0 {
+		result, _ := json.Marshal(models.BaseResponse{
+			Result: models.UserResponse{
+				User: dbUser[0],
+				New:  false,
+			},
+		})
+		w.Write(result)
+		return
+	}
+	if err != nil {
+		result, _ := json.Marshal(models.BaseResponse{
+			Error: err.Error(),
+		})
+		w.Write(result)
+		return
+	}
+	userResult := models.User{
+		Name:  user.Name,
+		Image: user.Image,
+		GID:   user.GID,
+	}
+	err1 := db.Create(&userResult).Error
+	if err1 != nil {
+		result, _ := json.Marshal(models.BaseResponse{
+			Error: err1.Error(),
+		})
+		w.Write(result)
+	}
+	result, _ := json.Marshal(models.BaseResponse{
+		Result: models.UserResponse{
+			User: userResult,
+			New:  true,
+		},
+	})
+	w.Write(result)
+}
+
+func UpdateUserRouterHanler(w http.ResponseWriter, r *http.Request) {
+	var (
+		buf    bytes.Buffer
+		user   models.UserIn
+		dbUser []models.User
+	)
+	io.Copy(&buf, r.Body)
+	json.Unmarshal(buf.Bytes(), &user)
+	db.Where("g_id = ?", user.GID).Find(&dbUser)
+	if len(dbUser) == 0 {
+		result, _ := json.Marshal(models.BaseResponse{
+			Error: "No such user",
+		})
+		w.Write(result)
+		return
+	}
+	var resultUser = models.User{
+		Name:  user.Name,
+		Image: user.Image,
+		GID:   dbUser[0].GID,
+	}
+	resultUser.ID = dbUser[0].ID
+	db.Save(&resultUser)
+	db.Where("g_id = ?", user.GID).Find(&dbUser)
+	result, _ := json.Marshal(models.BaseResponse{
+		Result: dbUser[0],
+	})
+	w.Write(result)
+}
+
 func main() {
 	fmt.Println("Server started!")
 	dbt, dbErr := gorm.Open(sqlite.Open("test.db"), &gorm.Config{})
@@ -270,6 +365,7 @@ func main() {
 		&models.Recept{},
 		&models.ImageReceptProduct{},
 		&models.ReceptProduct{},
+		&models.User{},
 	)
 
 	http.HandleFunc("/add_product", AddProductRouterHandler)          // Добавление продукта в бд
@@ -279,7 +375,10 @@ func main() {
 	http.HandleFunc("/query_recept", QueryReceptRouterHandler)        // Получение рецептов
 	http.HandleFunc("/query_product", QueryProductRouterHandler)      // Получение продуктов
 	http.HandleFunc("/search_product", GetProductByNameRouterHandler) // Получение продуктов по названию
-	http.HandleFunc("/politics", PoliticsRouterHandler)               // Политика кондфициальности
+	http.HandleFunc("/log_in", AddNewUserRouterHandler)               // Добавление нового пользователя
+	http.HandleFunc("/update_user", UpdateUserRouterHanler)           // Обновление пользователя
+
+	http.HandleFunc("/politics", PoliticsRouterHandler) // Политика кондфициальности
 
 	err := http.ListenAndServe(":8080", nil)
 	if err != nil {
