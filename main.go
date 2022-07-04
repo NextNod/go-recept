@@ -164,11 +164,12 @@ func QueryReceptRouterHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		resultRecepts = append(resultRecepts, models.ReceptResponse{
-			ID:       recept.ID,
-			Author:   user,
-			Name:     recept.Name,
-			Images:   images,
-			Products: products,
+			ID:          recept.ID,
+			Author:      user,
+			Name:        recept.Name,
+			Description: recept.Description,
+			Images:      images,
+			Products:    products,
 		})
 	}
 	result, _ := json.Marshal(models.BaseResponse{Result: resultRecepts})
