@@ -20,13 +20,6 @@ type ReceptProduct struct {
 	ProducId int
 }
 
-type ImageReceptProduct struct {
-	gorm.Model
-	Image     string
-	ProductId uint
-	ReceptId  uint
-}
-
 type ProductIn struct {
 	Name   string
 	Images []string
@@ -48,27 +41,20 @@ type ReceptResponse struct {
 	ID          uint
 	Name        string
 	Description string
-	Author      User
-	Images      []ImageReceptProduct
+	Author      UserOut
+	Images      []ImageReceptProductOut
 	Products    []ProductResponse
 }
 
 type ProductResponse struct {
 	ID     uint
 	Name   string
-	Images []ImageReceptProduct
+	Images []ImageReceptProductOut
 }
 
 type BaseResponse struct {
 	Result any
 	Error  string
-}
-
-type User struct {
-	gorm.Model
-	Name  string
-	Image string
-	GID   string
 }
 
 type UserIn struct {

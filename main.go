@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+
 	"os"
 
 	"main/models"
@@ -23,7 +24,7 @@ func AddProductRouterHandler(w http.ResponseWriter, r *http.Request) {
 	var (
 		buf     bytes.Buffer
 		modelIn models.ProductIn
-		images  []models.ImageReceptProduct
+		images  []models.ImageReceptProductOut
 	)
 	io.Copy(&buf, r.Body)
 	json.Unmarshal(buf.Bytes(), &modelIn)
@@ -35,12 +36,12 @@ func AddProductRouterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for _, image := range modelIn.Images {
-		var image = models.ImageReceptProduct{
+		var image = models.ImageReceptProductDB{
 			Image:     image,
 			ProductId: product.ID,
 		}
 		db.Create(&image)
-		images = append(images, image)
+		images = append(images, models.NewImageReceptProductOut(image))
 	}
 	result, _ := json.Marshal(models.BaseResponse{
 		Result: models.ProductResponse{
@@ -70,7 +71,7 @@ func AddReceptRouterHadler(w http.ResponseWriter, r *http.Request) {
 	var (
 		buf      bytes.Buffer
 		receptIn models.ReceptIn
-		author   []models.User
+		author   []models.UserDB
 	)
 	io.Copy(&buf, r.Body)
 	json.Unmarshal(buf.Bytes(), &receptIn)
@@ -103,7 +104,7 @@ func AddReceptRouterHadler(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	for _, image := range receptIn.Images {
-		db.Create(&models.ImageReceptProduct{
+		db.Create(&models.ImageReceptProductDB{
 			Image:    image,
 			ReceptId: recept.ID,
 		})
@@ -139,36 +140,36 @@ func QueryReceptRouterHandler(w http.ResponseWriter, r *http.Request) {
 	db.Limit(offset + 20).Offset(offset).Find(&recepts)
 	for _, recept := range recepts {
 		var (
-			images       []models.ImageReceptProduct
+			imagesDB     []models.ImageReceptProductDB
 			products_ids []models.ReceptProduct
 			products     []models.ProductResponse
-			user         models.User
+			user         models.UserDB
 		)
 
-		db.Where("recept_id = ?", recept.ID).Find(&images)
+		db.Where("recept_id = ?", recept.ID).Find(&imagesDB)
 		db.Where("recept_id = ?", recept.ID).Find(&products_ids)
 		db.Find(&user, recept.Author)
 
 		for _, product_id := range products_ids {
 			var (
 				product        models.Product
-				product_images []models.ImageReceptProduct
+				product_images []models.ImageReceptProductDB
 			)
 			db.Find(&product, product_id.ProducId)
 			db.Where("product_id = ?", product.ID).Find(&product_images)
 			products = append(products, models.ProductResponse{
 				ID:     product.ID,
 				Name:   product.Name,
-				Images: product_images,
+				Images: models.NewAImageReceptProductOut(product_images),
 			})
 		}
 
 		resultRecepts = append(resultRecepts, models.ReceptResponse{
 			ID:          recept.ID,
-			Author:      user,
+			Author:      models.NewUserOut(user),
 			Name:        recept.Name,
 			Description: recept.Description,
-			Images:      images,
+			Images:      models.NewAImageReceptProductOut(imagesDB),
 			Products:    products,
 		})
 	}
@@ -196,7 +197,7 @@ func QueryProductRouterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for _, product := range products {
-		var images []models.ImageReceptProduct
+		var images []models.ImageReceptProductDB
 		err2 := db.Where("product_id = ?", product.ID).Find(&images).Error
 		if err2 != nil {
 			fmt.Fprint(w, err2.Error())
@@ -205,7 +206,7 @@ func QueryProductRouterHandler(w http.ResponseWriter, r *http.Request) {
 		resultProducts = append(resultProducts, models.ProductResponse{
 			ID:     product.ID,
 			Name:   product.Name,
-			Images: images,
+			Images: models.NewAImageReceptProductOut(images),
 		})
 	}
 	resutl, _ := json.Marshal(models.BaseResponse{Result: resultProducts})
@@ -228,14 +229,14 @@ func GetProductsRouterHandler(w http.ResponseWriter, r *http.Request) {
 	for _, productID := range connects {
 		var (
 			product models.Product
-			images  []models.ImageReceptProduct
+			images  []models.ImageReceptProductDB
 		)
 		db.Find(&product, productID.ProducId)
 		db.Where("product_id = ?", productID.ProducId).Find(&images)
 		products = append(products, models.ProductResponse{
 			ID:     product.ID,
 			Name:   product.Name,
-			Images: images,
+			Images: models.NewAImageReceptProductOut(images),
 		})
 	}
 	result, _ := json.Marshal(models.BaseResponse{Result: products})
@@ -252,12 +253,12 @@ func GetProductByNameRouterHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Printf("Search: %s\n", name)
 	db.Where("name LIKE ?", "%"+name+"%").Find(&products)
 	for _, product := range products {
-		var images []models.ImageReceptProduct
+		var images []models.ImageReceptProductDB
 		db.Where("product_id = ?", product.ID).Find(&images)
 		productsResult = append(productsResult, models.ProductResponse{
 			ID:     product.ID,
 			Name:   product.Name,
-			Images: images,
+			Images: models.NewAImageReceptProductOut(images),
 		})
 	}
 	result, _ := json.Marshal(models.BaseResponse{Result: productsResult})
@@ -279,7 +280,7 @@ func AddNewUserRouterHandler(w http.ResponseWriter, r *http.Request) {
 	var (
 		buf    bytes.Buffer
 		user   models.UserIn
-		dbUser []models.User
+		dbUser []models.UserDB
 	)
 	io.Copy(&buf, r.Body)
 	err := json.Unmarshal(buf.Bytes(), &user)
@@ -287,7 +288,7 @@ func AddNewUserRouterHandler(w http.ResponseWriter, r *http.Request) {
 	if len(dbUser) != 0 {
 		result, _ := json.Marshal(models.BaseResponse{
 			Result: models.UserResponse{
-				User: dbUser[0],
+				User: models.NewUserOut(dbUser[0]),
 				New:  false,
 			},
 		})
@@ -301,7 +302,7 @@ func AddNewUserRouterHandler(w http.ResponseWriter, r *http.Request) {
 		w.Write(result)
 		return
 	}
-	userResult := models.User{
+	userResult := models.UserDB{
 		Name:  user.Name,
 		Image: user.Image,
 		GID:   user.GID,
@@ -326,7 +327,7 @@ func UpdateUserRouterHanler(w http.ResponseWriter, r *http.Request) {
 	var (
 		buf    bytes.Buffer
 		user   models.UserIn
-		dbUser []models.User
+		dbUser []models.UserDB
 	)
 	io.Copy(&buf, r.Body)
 	json.Unmarshal(buf.Bytes(), &user)
@@ -338,7 +339,7 @@ func UpdateUserRouterHanler(w http.ResponseWriter, r *http.Request) {
 		w.Write(result)
 		return
 	}
-	var resultUser = models.User{
+	var resultUser = models.UserDB{
 		Name:  user.Name,
 		Image: user.Image,
 		GID:   dbUser[0].GID,
@@ -347,7 +348,7 @@ func UpdateUserRouterHanler(w http.ResponseWriter, r *http.Request) {
 	db.Save(&resultUser)
 	db.Where("g_id = ?", user.GID).Find(&dbUser)
 	result, _ := json.Marshal(models.BaseResponse{
-		Result: dbUser[0],
+		Result: models.NewUserOut(dbUser[0]),
 	})
 	w.Write(result)
 }
@@ -355,18 +356,19 @@ func UpdateUserRouterHanler(w http.ResponseWriter, r *http.Request) {
 func main() {
 	fmt.Println("Server started!")
 	dbt, dbErr := gorm.Open(sqlite.Open("test.db"), &gorm.Config{})
+
 	db = dbt
 
 	if dbErr != nil {
-		panic("No database!")
+		panic(dbErr.Error())
 	}
 
-	db.AutoMigrate(
+	_ = db.AutoMigrate(
 		&models.Product{},
 		&models.Recept{},
-		&models.ImageReceptProduct{},
+		&models.ImageReceptProductDB{},
 		&models.ReceptProduct{},
-		&models.User{},
+		&models.UserDB{},
 	)
 
 	http.HandleFunc("/add_product", AddProductRouterHandler)          // Добавление продукта в бд
